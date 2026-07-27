@@ -1,13 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Paper AI Assistant",
-  "version": "1.1",
+  "version": "1.2",
   "description": "논문 화면 드래그 캡처 및 Gemini AI 전문용어/Figure 직접 해설 도구",
   "permissions": [
     "activeTab",
     "scripting",
     "sidePanel",
     "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
