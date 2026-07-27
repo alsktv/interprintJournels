@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // background.js에 보관된 이미지가 있는지 확인 요청
+  // background.js에 저장된 캡처 이미지가 있는지 확인
   fetchStoredImage();
 });
 
@@ -48,7 +48,7 @@ function applyCapturedImage(imageDataUrl) {
   resultBox.textContent = "영역 캡처가 완료되었습니다. 원하시는 분석 버튼을 누르세요!";
 }
 
-// 4. 실시간 수신 리스너 (드래그를 다시 했을 경우 대응)
+// 4. 실시간 수신 리스너
 chrome.runtime.onMessage.addListener((request) => {
   if (request.action === "sendCapturedImage" && request.image) {
     applyCapturedImage(request.image);
@@ -77,13 +77,14 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
 
     try {
       const promptMap = {
+        translate: "이 이미지 영역에 포함된 모든 텍스트 및 논문 문장을 학술 맥락에 맞게 자연스럽고 매끄러운 한국어로 전문 번역해 주세요. 문맥이 어색하지 않도록 직역보다는 자연스러운 학술 번역체를 사용하세요.",
         figure: "이 영역은 논문의 Figure 또는 그래프입니다. X축/Y축의 의미, 데이터의 경향성 및 시각적 핵심 결론을 학부생도 이해하기 쉽게 한국어로 설명해 주세요.",
         concept: "이 영역에 등장하는 전문용어와 학술 개념을 비유를 들어 아주 쉽게 풀어서 한국어로 설명해 주세요.",
         summary: "이 단락/결과의 핵심 내용과 주장을 3개의 불릿포인트로 요약해 주세요.",
         formula: "이 영역에 나타난 수식, 변수(Variable), 물리적 기호들의 의미와 작동 원리를 단계별로 설명해 주세요."
       };
 
-      const selectedPrompt = promptMap[promptType] || promptMap.summary;
+      const selectedPrompt = promptMap[promptType] || promptMap.translate;
       const base64Data = currentImageBase64.replace(/^data:image\/(png|jpeg);base64,/, "");
 
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
@@ -106,7 +107,11 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
       if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
         resultBox.textContent = data.candidates[0].content.parts[0].text;
       } else if (data.error) {
-        resultBox.textContent = "❌ Gemini API 오류: " + data.error.message;
+        if (data.error.code === 429 || data.error.message.includes("Quota exceeded")) {
+          resultBox.textContent = "⚠️ Gemini API 분당 요청 한도(15회/분)를 초과했습니다.\n\n약 1분 정도 기다렸다가 다시 [분석] 버튼을 눌러주세요!";
+        } else {
+          resultBox.textContent = "❌ Gemini API 오류: " + data.error.message;
+        }
       } else {
         resultBox.textContent = "❌ 분석 결과를 불러오지 못했습니다.";
       }
