@@ -27,7 +27,7 @@
   floatBtn.addEventListener("mouseout", () => floatBtn.style.transform = "scale(1)");
   document.body.appendChild(floatBtn);
 
-  // 2. 버튼 클릭 시 드래그 영역 오버레이 생성
+  // 2. 버튼 클릭 시 드래그 영역 오버레이
   floatBtn.addEventListener("click", () => {
     startSelectionMode();
   });
@@ -99,14 +99,13 @@
 
       document.body.removeChild(overlay);
 
-      // 최소 드래그 크기 확인 (너무 작으면 취소)
       if (rect.width > 20 && rect.height > 20) {
         cropAndCapture(rect);
       }
     });
   }
 
-  // 3. 선택한 영역 이미지 자르기 (Crop)
+  // 3. 선택한 영역 자르기
   function cropAndCapture(rect) {
     chrome.runtime.sendMessage({ action: "captureTab" }, (response) => {
       if (!response || !response.dataUrl) return;
@@ -117,7 +116,6 @@
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
 
-        // 레티나/고해상도 디스플레이 DevicePixelRatio 반영
         const dpr = window.devicePixelRatio || 1;
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
@@ -136,7 +134,6 @@
 
         const croppedDataUrl = canvas.toDataURL("image/png");
 
-        // 자른 이미지를 사이드바에 전달 및 사이드바 오픈
         chrome.runtime.sendMessage({ action: "openSidePanel" });
         setTimeout(() => {
           chrome.runtime.sendMessage({
