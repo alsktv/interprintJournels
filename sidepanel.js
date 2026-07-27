@@ -90,6 +90,7 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
       const selectedPrompt = promptMap[promptType] || promptMap.translate;
       const base64Data = currentImageBase64.replace(/^data:image\/(png|jpeg);base64,/, "");
 
+      // Gemini 1.5 Flash 모델 엔드포인트
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
       const response = await fetch(apiUrl, {
@@ -99,7 +100,12 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
           contents: [{
             parts: [
               { text: selectedPrompt },
-              { inline_data: { mime_type: "image/png", data: base64Data } }
+              { 
+                inline_data: { 
+                  mime_type: "image/png", 
+                  data: base64Data 
+                } 
+              }
             ]
           }]
         })
