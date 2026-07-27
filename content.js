@@ -10,7 +10,7 @@
     position: "fixed",
     bottom: "30px",
     right: "30px",
-    zIndex: "999999",
+    zIndex: "2147483647", // 브라우저 최상단 레이어 보장
     padding: "12px 18px",
     backgroundColor: "#1a73e8",
     color: "#fff",
@@ -27,12 +27,21 @@
   floatBtn.addEventListener("mouseout", () => floatBtn.style.transform = "scale(1)");
   document.body.appendChild(floatBtn);
 
-  // 2. 버튼 클릭 시 드래그 영역 오버레이
+  // 2. 버튼 클릭 시 드래그 모드 시작
   floatBtn.addEventListener("click", () => {
+    // 확장프로그램 컨텍스트 검사
+    if (!chrome.runtime?.id) {
+      alert("확장프로그램이 업데이트되었습니다. 페이지를 새로고침(F5) 해주세요!");
+      return;
+    }
     startSelectionMode();
   });
 
   function startSelectionMode() {
+    // 기존 오버레이가 있다면 제거
+    const oldOverlay = document.getElementById("paper-selection-overlay");
+    if (oldOverlay) oldOverlay.remove();
+
     const overlay = document.createElement("div");
     overlay.id = "paper-selection-overlay";
     Object.assign(overlay.style, {
@@ -41,37 +50,48 @@
       left: "0",
       width: "100vw",
       height: "100vh",
-      backgroundColor: "rgba(0, 0, 0, 0.3)",
-      zIndex: "9999999",
-      cursor: "crosshair"
+      backgroundColor: "rgba(0, 0, 0, 0.25)",
+      zIndex: "2147483646", // 최상위 z-index
+      cursor: "crosshair",
+      userSelect: "none",
+      webkitUserSelect: "none",
+      touchAction: "none"
     });
 
     const selectionBox = document.createElement("div");
     Object.assign(selectionBox.style, {
-      position: "absolute",
+      position: "fixed",
       border: "2px dashed #1a73e8",
-      backgroundColor: "rgba(26, 115, 232, 0.15)",
+      backgroundColor: "rgba(26, 115, 232, 0.2)",
       pointerEvents: "none",
-      display: "none"
+      display: "none",
+      zIndex: "2147483647"
     });
     overlay.appendChild(selectionBox);
     document.body.appendChild(overlay);
 
-    let startX, startY, isDragging = false;
+    let startX = 0, startY = 0, isDragging = false;
 
-    overlay.addEventListener("mousedown", (e) => {
+    // 마우스 이벤트 수신
+    const onMouseDown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       startX = e.clientX;
       startY = e.clientY;
       isDragging = true;
+
       selectionBox.style.left = `${startX}px`;
       selectionBox.style.top = `${startY}px`;
       selectionBox.style.width = "0px";
       selectionBox.style.height = "0px";
       selectionBox.style.display = "block";
-    });
+    };
 
-    overlay.addEventListener("mousemove", (e) => {
+    const onMouseMove = (e) => {
       if (!isDragging) return;
+      e.preventDefault();
+      e.stopPropagation();
+
       const currentX = e.clientX;
       const currentY = e.clientY;
 
@@ -80,76 +100,95 @@
       const left = Math.min(startX, currentX);
       const top = Math.min(startY, currentY);
 
-      selectionBox.style.width = `${width}px`;
-      selectionBox.style.height = `${height}px`;
       selectionBox.style.left = `${left}px`;
       selectionBox.style.top = `${top}px`;
-    });
+      selectionBox.style.width = `${width}px`;
+      selectionBox.style.height = `${height}px`;
+    };
 
-    overlay.addEventListener("mouseup", (e) => {
+    const onMouseUp = (e) => {
       if (!isDragging) return;
+      e.preventDefault();
+      e.stopPropagation();
       isDragging = false;
 
       const rect = {
-        x: parseInt(selectionBox.style.left),
-        y: parseInt(selectionBox.style.top),
-        width: parseInt(selectionBox.style.width),
-        height: parseInt(selectionBox.style.height)
+        x: parseInt(selectionBox.style.left, 10),
+        y: parseInt(selectionBox.style.top, 10),
+        width: parseInt(selectionBox.style.width, 10),
+        height: parseInt(selectionBox.style.height, 10)
       };
 
-      document.body.removeChild(overlay);
+      // 이벤트 리스너 및 오버레이 정리
+      overlay.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
 
+      // 최소 유효 드래그 크기 확인 (20px 이상)
       if (rect.width > 20 && rect.height > 20) {
         cropAndCapture(rect);
       }
-    });
+    };
+
+    overlay.addEventListener("mousedown", onMouseDown, true);
+    window.addEventListener("mousemove", onMouseMove, true);
+    window.addEventListener("mouseup", onMouseUp, true);
   }
 
-  // 3. 선택한 영역 자르기
-// 3. 선택한 영역 자르기 및 사이드바 전달 (보정 버전)
-function cropAndCapture(rect) {
-  // ① 마우스 업 직후 유저 제스처 타이밍에 즉시 사이드바 오픈 요청
-  chrome.runtime.sendMessage({ action: "openSidePanel" });
-
-  // ② 화면 캡처 수행
-  chrome.runtime.sendMessage({ action: "captureTab" }, (response) => {
-    if (!response || !response.dataUrl) {
-      console.error("화면 캡처에 실패했습니다.");
+  // 3. 영역 자르기 및 사이드바 전송
+  function cropAndCapture(rect) {
+    if (!chrome.runtime?.id) {
+      alert("페이지를 새로고침(F5) 후 다시 시도해 주세요.");
       return;
     }
 
-    const img = new Image();
-    img.src = response.dataUrl;
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
+    try {
+      // 1) 사이드바 열기 요청
+      chrome.runtime.sendMessage({ action: "openSidePanel" });
 
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+      // 2) 탭 캡처
+      chrome.runtime.sendMessage({ action: "captureTab" }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.dataUrl) {
+          console.error("캡처 실패:", chrome.runtime.lastError?.message);
+          return;
+        }
 
-      ctx.drawImage(
-        img,
-        rect.x * dpr,
-        rect.y * dpr,
-        rect.width * dpr,
-        rect.height * dpr,
-        0,
-        0,
-        rect.width * dpr,
-        rect.height * dpr
-      );
+        const img = new Image();
+        img.src = response.dataUrl;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          const dpr = window.devicePixelRatio || 1;
 
-      const croppedDataUrl = canvas.toDataURL("image/png");
+          canvas.width = rect.width * dpr;
+          canvas.height = rect.height * dpr;
 
-      // ③ 사이드바가 완전히 로드될 수 있도록 0.5초 여유를 두고 데이터 전송
-      setTimeout(() => {
-        chrome.runtime.sendMessage({
-          action: "sendCapturedImage",
-          image: croppedDataUrl
-        });
-      }, 500);
-    };
-  });
-}
+          ctx.drawImage(
+            img,
+            rect.x * dpr,
+            rect.y * dpr,
+            rect.width * dpr,
+            rect.height * dpr,
+            0,
+            0,
+            rect.width * dpr,
+            rect.height * dpr
+          );
+
+          const croppedDataUrl = canvas.toDataURL("image/png");
+
+          // 3) 사이드바 로드 대기 후 전송
+          setTimeout(() => {
+            chrome.runtime.sendMessage({
+              action: "sendCapturedImage",
+              image: croppedDataUrl
+            });
+          }, 400);
+        };
+      });
+    } catch (err) {
+      console.error("전송 오류:", err);
+    }
+  }
 })();
