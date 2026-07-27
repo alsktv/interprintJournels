@@ -17,6 +17,40 @@
       margin-top: 0;
       margin-bottom: 12px;
     }
+    .api-key-box {
+      background: #fff;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 14px;
+    }
+    .api-key-box label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #5f6368;
+      margin-bottom: 4px;
+    }
+    .api-key-input-group {
+      display: flex;
+      gap: 6px;
+    }
+    .api-key-input-group input {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+    .api-key-input-group button {
+      padding: 6px 10px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
     .preview-box {
       width: 100%;
       border: 1px dashed #dadce0;
@@ -25,7 +59,7 @@
       box-sizing: border-box;
       background: #fff;
       text-align: center;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     .preview-box img {
       max-width: 100%;
@@ -37,7 +71,6 @@
       font-size: 0.85rem;
       padding: 15px 0;
     }
-    
     .template-label {
       font-size: 0.85rem;
       font-weight: 600;
@@ -48,7 +81,7 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     .btn-template {
       padding: 10px 8px;
@@ -69,7 +102,6 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
-
     .result-box {
       background: #ffffff;
       border: 1px solid #dadce0;
@@ -83,16 +115,22 @@
     .loading {
       color: #1a73e8;
       font-weight: bold;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
   </style>
 </head>
 <body>
 
   <h2>🔬 논문 AI 해설 도구</h2>
-  
+
+  <!-- Gemini API Key 설정 영역 -->
+  <div class="api-key-box">
+    <label for="apiKeyInput">Gemini API Key 설정</label>
+    <div class="api-key-input-group">
+      <input type="password" id="apiKeyInput" placeholder="AI Studio 키 입력" />
+      <button id="saveApiKeyBtn">저장</button>
+    </div>
+  </div>
+
   <div class="preview-box">
     <div id="placeholder" class="placeholder">화면에서 분석할 영역을 드래그하세요.</div>
     <img id="capturedImage" alt="Captured Area" />
