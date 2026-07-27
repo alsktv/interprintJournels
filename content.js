@@ -2,6 +2,15 @@
   if (window.hasPaperAssistant) return;
   window.hasPaperAssistant = true;
 
+  let latestCroppedImage = null;
+
+  // 사이드바에서 이미지를 요청할 때 보내주는 핸드셰이크 리스너
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "getCapturedImage") {
+      sendResponse({ image: latestCroppedImage });
+    }
+  });
+
   // 1. 우측 하단 플로팅 버튼 생성
   const floatBtn = document.createElement("button");
   floatBtn.id = "paper-assistant-btn";
@@ -10,7 +19,7 @@
     position: "fixed",
     bottom: "30px",
     right: "30px",
-    zIndex: "2147483647", // 브라우저 최상단 레이어 보장
+    zIndex: "2147483647",
     padding: "12px 18px",
     backgroundColor: "#1a73e8",
     color: "#fff",
@@ -29,7 +38,6 @@
 
   // 2. 버튼 클릭 시 드래그 모드 시작
   floatBtn.addEventListener("click", () => {
-    // 확장프로그램 컨텍스트 검사
     if (!chrome.runtime?.id) {
       alert("확장프로그램이 업데이트되었습니다. 페이지를 새로고침(F5) 해주세요!");
       return;
@@ -38,7 +46,6 @@
   });
 
   function startSelectionMode() {
-    // 기존 오버레이가 있다면 제거
     const oldOverlay = document.getElementById("paper-selection-overlay");
     if (oldOverlay) oldOverlay.remove();
 
@@ -51,7 +58,7 @@
       width: "100vw",
       height: "100vh",
       backgroundColor: "rgba(0, 0, 0, 0.25)",
-      zIndex: "2147483646", // 최상위 z-index
+      zIndex: "2147483646",
       cursor: "crosshair",
       userSelect: "none",
       webkitUserSelect: "none",
@@ -72,7 +79,6 @@
 
     let startX = 0, startY = 0, isDragging = false;
 
-    // 마우스 이벤트 수신
     const onMouseDown = (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -119,13 +125,11 @@
         height: parseInt(selectionBox.style.height, 10)
       };
 
-      // 이벤트 리스너 및 오버레이 정리
       overlay.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
 
-      // 최소 유효 드래그 크기 확인 (20px 이상)
       if (rect.width > 20 && rect.height > 20) {
         cropAndCapture(rect);
       }
@@ -136,7 +140,7 @@
     window.addEventListener("mouseup", onMouseUp, true);
   }
 
-  // 3. 영역 자르기 및 사이드바 전송
+  // 3. 영역 자르기 및 데이터 보관/사이드바 오픈
   function cropAndCapture(rect) {
     if (!chrome.runtime?.id) {
       alert("페이지를 새로고침(F5) 후 다시 시도해 주세요.");
@@ -144,10 +148,10 @@
     }
 
     try {
-      // 1) 사이드바 열기 요청
+      // 사이드바 여는 요청 전송
       chrome.runtime.sendMessage({ action: "openSidePanel" });
 
-      // 2) 탭 캡처
+      // 화면 캡처
       chrome.runtime.sendMessage({ action: "captureTab" }, (response) => {
         if (chrome.runtime.lastError || !response || !response.dataUrl) {
           console.error("캡처 실패:", chrome.runtime.lastError?.message);
@@ -176,15 +180,13 @@
             rect.height * dpr
           );
 
-          const croppedDataUrl = canvas.toDataURL("image/png");
+          latestCroppedImage = canvas.toDataURL("image/png");
 
-          // 3) 사이드바 로드 대기 후 전송
-          setTimeout(() => {
-            chrome.runtime.sendMessage({
-              action: "sendCapturedImage",
-              image: croppedDataUrl
-            });
-          }, 400);
+          // 실시간 수신용 메시지도 전송
+          chrome.runtime.sendMessage({
+            action: "sendCapturedImage",
+            image: latestCroppedImage
+          });
         };
       });
     } catch (err) {

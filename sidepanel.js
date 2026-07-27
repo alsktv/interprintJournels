@@ -1,10 +1,23 @@
 let currentImageBase64 = "";
 
-// 1. 저장된 API Key 로드
+// 1. 사이드바가 켜지자마자 실행되는 초기화 로직
 document.addEventListener("DOMContentLoaded", () => {
+  // API Key 불러오기
   chrome.storage.local.get(["geminiApiKey"], (result) => {
     if (result.geminiApiKey) {
       document.getElementById("apiKeyInput").value = result.geminiApiKey;
+    }
+  });
+
+  // 현재 탭의 content.js에게 보관된 캡처 이미지가 있는지 능동적으로 요청
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]?.id) {
+      chrome.tabs.sendMessage(tabs[0].id, { action: "getCapturedImage" }, (response) => {
+        if (chrome.runtime.lastError) return;
+        if (response && response.image) {
+          applyCapturedImage(response.image);
+        }
+      });
     }
   });
 });
@@ -21,23 +34,28 @@ document.getElementById("saveApiKeyBtn").addEventListener("click", () => {
   });
 });
 
-// 3. 캡처 이미지 수신
+// 3. 이미지 공통 적용 함수
+function applyCapturedImage(imageDataUrl) {
+  const imgEl = document.getElementById("capturedImage");
+  const placeholder = document.getElementById("placeholder");
+  const resultBox = document.getElementById("resultBox");
+
+  currentImageBase64 = imageDataUrl;
+  imgEl.src = currentImageBase64;
+  imgEl.style.display = "block";
+  placeholder.style.display = "none";
+
+  resultBox.textContent = "영역 캡처가 완료되었습니다. 원하시는 분석 버튼을 누르세요!";
+}
+
+// 4. 실시간 수신 리스너
 chrome.runtime.onMessage.addListener((request) => {
-  if (request.action === "sendCapturedImage") {
-    const imgEl = document.getElementById("capturedImage");
-    const placeholder = document.getElementById("placeholder");
-    const resultBox = document.getElementById("resultBox");
-
-    currentImageBase64 = request.image;
-    imgEl.src = currentImageBase64;
-    imgEl.style.display = "block";
-    placeholder.style.display = "none";
-
-    resultBox.textContent = "영역 캡처가 완료되었습니다. 분석 버튼을 누르세요!";
+  if (request.action === "sendCapturedImage" && request.image) {
+    applyCapturedImage(request.image);
   }
 });
 
-// 4. 프롬프트 버튼 클릭 이벤트 및 Gemini API 직접 호출
+// 5. 프롬프트 버튼 클릭 이벤트 및 Gemini API 호출
 document.querySelectorAll(".btn-template").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
     if (!currentImageBase64) {
@@ -54,7 +72,7 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
     const promptType = e.target.getAttribute("data-type");
     const resultBox = document.getElementById("resultBox");
 
-    resultBox.innerHTML = `<div class="loading">⏳ Gemini AI가 직접 분석 중입니다... 잠시만 기다려주세요.</div>`;
+    resultBox.innerHTML = `<div class="loading">⏳ Gemini AI가 분석 중입니다... 잠시만 기다려주세요.</div>`;
     toggleButtons(false);
 
     try {
@@ -68,7 +86,6 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
       const selectedPrompt = promptMap[promptType] || promptMap.summary;
       const base64Data = currentImageBase64.replace(/^data:image\/(png|jpeg);base64,/, "");
 
-      // Gemini 1.5 Flash API 직접 호출
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
       const response = await fetch(apiUrl, {
