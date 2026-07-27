@@ -106,42 +106,50 @@
   }
 
   // 3. 선택한 영역 자르기
-  function cropAndCapture(rect) {
-    chrome.runtime.sendMessage({ action: "captureTab" }, (response) => {
-      if (!response || !response.dataUrl) return;
+// 3. 선택한 영역 자르기 및 사이드바 전달 (보정 버전)
+function cropAndCapture(rect) {
+  // ① 마우스 업 직후 유저 제스처 타이밍에 즉시 사이드바 오픈 요청
+  chrome.runtime.sendMessage({ action: "openSidePanel" });
 
-      const img = new Image();
-      img.src = response.dataUrl;
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
+  // ② 화면 캡처 수행
+  chrome.runtime.sendMessage({ action: "captureTab" }, (response) => {
+    if (!response || !response.dataUrl) {
+      console.error("화면 캡처에 실패했습니다.");
+      return;
+    }
 
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
+    const img = new Image();
+    img.src = response.dataUrl;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
 
-        ctx.drawImage(
-          img,
-          rect.x * dpr,
-          rect.y * dpr,
-          rect.width * dpr,
-          rect.height * dpr,
-          0,
-          0,
-          rect.width * dpr,
-          rect.height * dpr
-        );
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
 
-        const croppedDataUrl = canvas.toDataURL("image/png");
+      ctx.drawImage(
+        img,
+        rect.x * dpr,
+        rect.y * dpr,
+        rect.width * dpr,
+        rect.height * dpr,
+        0,
+        0,
+        rect.width * dpr,
+        rect.height * dpr
+      );
 
-        chrome.runtime.sendMessage({ action: "openSidePanel" });
-        setTimeout(() => {
-          chrome.runtime.sendMessage({
-            action: "sendCapturedImage",
-            image: croppedDataUrl
-          });
-        }, 300);
-      };
-    });
-  }
+      const croppedDataUrl = canvas.toDataURL("image/png");
+
+      // ③ 사이드바가 완전히 로드될 수 있도록 0.5초 여유를 두고 데이터 전송
+      setTimeout(() => {
+        chrome.runtime.sendMessage({
+          action: "sendCapturedImage",
+          image: croppedDataUrl
+        });
+      }, 500);
+    };
+  });
+}
 })();
