@@ -2,14 +2,14 @@ let currentImageBase64 = "";
 
 // 1. 사이드바 초기화 로직
 document.addEventListener("DOMContentLoaded", () => {
-  // API Key 로드
+  // 저장된 API Key 불러오기
   chrome.storage.local.get(["geminiApiKey"], (result) => {
     if (result.geminiApiKey) {
       document.getElementById("apiKeyInput").value = result.geminiApiKey;
     }
   });
 
-  // background.js에 저장된 캡처 이미지가 있는지 확인
+  // background.js에 저장된 캡처 이미지가 있는지 확인 요청
   fetchStoredImage();
 });
 
@@ -22,7 +22,7 @@ function fetchStoredImage() {
   });
 }
 
-// 2. API Key 저장
+// 2. API Key 저장 (chrome.storage.local에 보관)
 document.getElementById("saveApiKeyBtn").addEventListener("click", () => {
   const key = document.getElementById("apiKeyInput").value.trim();
   if (!key) {
@@ -30,11 +30,11 @@ document.getElementById("saveApiKeyBtn").addEventListener("click", () => {
     return;
   }
   chrome.storage.local.set({ geminiApiKey: key }, () => {
-    alert("Gemini API Key가 저장되었습니다!");
+    alert("Gemini API Key가 성공적으로 저장되었습니다!");
   });
 });
 
-// 3. 이미지 화면에 표시
+// 3. 캡처된 이미지 화면에 표시
 function applyCapturedImage(imageDataUrl) {
   const imgEl = document.getElementById("capturedImage");
   const placeholder = document.getElementById("placeholder");
@@ -48,14 +48,14 @@ function applyCapturedImage(imageDataUrl) {
   resultBox.textContent = "영역 캡처가 완료되었습니다. 원하시는 분석 버튼을 누르세요!";
 }
 
-// 4. 실시간 수신 리스너
+// 4. 실시간 수신 리스너 (드래그를 다시 했을 경우 대응)
 chrome.runtime.onMessage.addListener((request) => {
   if (request.action === "sendCapturedImage" && request.image) {
     applyCapturedImage(request.image);
   }
 });
 
-// 5. 프롬프트 버튼 및 Gemini API 호출
+// 5. 프롬프트 버튼 클릭 이벤트 및 Gemini API 호출
 document.querySelectorAll(".btn-template").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
     if (!currentImageBase64) {
@@ -63,9 +63,12 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
       return;
     }
 
-    const apiKey = document.getElementById("apiKeyInput").value.trim();
+    // 클릭 시점에 chrome.storage에서 최신 저장된 API 키를 직접 다시 로드
+    const storageData = await chrome.storage.local.get(["geminiApiKey"]);
+    const apiKey = storageData.geminiApiKey || document.getElementById("apiKeyInput").value.trim();
+
     if (!apiKey) {
-      alert("상단에 Gemini API Key를 먼저 입력하고 저장해 주세요!");
+      alert("상단에 Gemini API Key를 입력하고 [저장] 버튼을 먼저 눌러주세요!");
       return;
     }
 
@@ -73,7 +76,7 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
     const resultBox = document.getElementById("resultBox");
 
     resultBox.innerHTML = `<div class="loading">⏳ Gemini AI가 분석 중입니다... 잠시만 기다려주세요.</div>`;
-    toggleButtons(false);
+    toggleButtons(false); // API 호출 중 버튼 중복 클릭 차단
 
     try {
       const promptMap = {
@@ -108,7 +111,8 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
         resultBox.textContent = data.candidates[0].content.parts[0].text;
       } else if (data.error) {
         if (data.error.code === 429 || data.error.message.includes("Quota exceeded")) {
-          resultBox.textContent = "⚠️ Gemini API 분당 요청 한도(15회/분)를 초과했습니다.\n\n약 1분 정도 기다렸다가 다시 [분석] 버튼을 눌러주세요!";
+          const matchedProject = data.error.message.match(/project_number:\d+/)?.[0] || "알 수 없음";
+          resultBox.textContent = `⚠️ API 요청 한도가 초과되었습니다.\n\n[원인]\n- Google Cloud 프로젝트 단위 분당 15회 호출 제한에 걸렸습니다.\n- 현재 요청된 프로젝트 번호: ${matchedProject}\n\n[해결 방법]\n1. Google AI Studio(aistudio.google.com)로 이동합니다.\n2. 'Create API key' 클릭 후 기존 프로젝트가 아닌 'Create API key in NEW project'를 선택하여 새 프로젝트로 키를 만듭니다.\n3. 상단에 새로 발급받은 키를 입력 후 [저장]을 누르고 30초 뒤에 다시 시도해 주세요.`;
         } else {
           resultBox.textContent = "❌ Gemini API 오류: " + data.error.message;
         }
@@ -118,11 +122,12 @@ document.querySelectorAll(".btn-template").forEach((btn) => {
     } catch (err) {
       resultBox.textContent = "⚠️ 통신 오류 발생: " + err.message;
     } finally {
-      toggleButtons(true);
+      toggleButtons(true); // 버튼 다시 활성화
     }
   });
 });
 
+// 버튼 활성화/비활성화 제어
 function toggleButtons(enable) {
   document.querySelectorAll(".btn-template").forEach((btn) => {
     btn.disabled = !enable;
