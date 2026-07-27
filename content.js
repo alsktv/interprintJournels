@@ -2,15 +2,6 @@
   if (window.hasPaperAssistant) return;
   window.hasPaperAssistant = true;
 
-  let latestCroppedImage = null;
-
-  // 사이드바에서 이미지를 요청할 때 보내주는 핸드셰이크 리스너
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "getCapturedImage") {
-      sendResponse({ image: latestCroppedImage });
-    }
-  });
-
   // 1. 우측 하단 플로팅 버튼 생성
   const floatBtn = document.createElement("button");
   floatBtn.id = "paper-assistant-btn";
@@ -140,7 +131,7 @@
     window.addEventListener("mouseup", onMouseUp, true);
   }
 
-  // 3. 영역 자르기 및 데이터 보관/사이드바 오픈
+  // 3. 영역 자르기 및 background.js로 전송
   function cropAndCapture(rect) {
     if (!chrome.runtime?.id) {
       alert("페이지를 새로고침(F5) 후 다시 시도해 주세요.");
@@ -148,10 +139,10 @@
     }
 
     try {
-      // 사이드바 여는 요청 전송
+      // 1) 사이드바 열기 요청
       chrome.runtime.sendMessage({ action: "openSidePanel" });
 
-      // 화면 캡처
+      // 2) 화면 캡처 요청
       chrome.runtime.sendMessage({ action: "captureTab" }, (response) => {
         if (chrome.runtime.lastError || !response || !response.dataUrl) {
           console.error("캡처 실패:", chrome.runtime.lastError?.message);
@@ -180,12 +171,12 @@
             rect.height * dpr
           );
 
-          latestCroppedImage = canvas.toDataURL("image/png");
+          const croppedImage = canvas.toDataURL("image/png");
 
-          // 실시간 수신용 메시지도 전송
+          // 3) background.js의 보관소로 이미지 넘기기
           chrome.runtime.sendMessage({
-            action: "sendCapturedImage",
-            image: latestCroppedImage
+            action: "storeCroppedImage",
+            image: croppedImage
           });
         };
       });

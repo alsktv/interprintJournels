@@ -1,26 +1,26 @@
 let currentImageBase64 = "";
 
-// 1. 사이드바가 켜지자마자 실행되는 초기화 로직
+// 1. 사이드바 초기화 로직
 document.addEventListener("DOMContentLoaded", () => {
-  // API Key 불러오기
+  // API Key 로드
   chrome.storage.local.get(["geminiApiKey"], (result) => {
     if (result.geminiApiKey) {
       document.getElementById("apiKeyInput").value = result.geminiApiKey;
     }
   });
 
-  // 현재 탭의 content.js에게 보관된 캡처 이미지가 있는지 능동적으로 요청
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs[0]?.id) {
-      chrome.tabs.sendMessage(tabs[0].id, { action: "getCapturedImage" }, (response) => {
-        if (chrome.runtime.lastError) return;
-        if (response && response.image) {
-          applyCapturedImage(response.image);
-        }
-      });
+  // background.js에 보관된 이미지가 있는지 확인 요청
+  fetchStoredImage();
+});
+
+function fetchStoredImage() {
+  chrome.runtime.sendMessage({ action: "getStoredImage" }, (response) => {
+    if (chrome.runtime.lastError) return;
+    if (response && response.image) {
+      applyCapturedImage(response.image);
     }
   });
-});
+}
 
 // 2. API Key 저장
 document.getElementById("saveApiKeyBtn").addEventListener("click", () => {
@@ -34,7 +34,7 @@ document.getElementById("saveApiKeyBtn").addEventListener("click", () => {
   });
 });
 
-// 3. 이미지 공통 적용 함수
+// 3. 이미지 화면에 표시
 function applyCapturedImage(imageDataUrl) {
   const imgEl = document.getElementById("capturedImage");
   const placeholder = document.getElementById("placeholder");
@@ -48,14 +48,14 @@ function applyCapturedImage(imageDataUrl) {
   resultBox.textContent = "영역 캡처가 완료되었습니다. 원하시는 분석 버튼을 누르세요!";
 }
 
-// 4. 실시간 수신 리스너
+// 4. 실시간 수신 리스너 (드래그를 다시 했을 경우 대응)
 chrome.runtime.onMessage.addListener((request) => {
   if (request.action === "sendCapturedImage" && request.image) {
     applyCapturedImage(request.image);
   }
 });
 
-// 5. 프롬프트 버튼 클릭 이벤트 및 Gemini API 호출
+// 5. 프롬프트 버튼 및 Gemini API 호출
 document.querySelectorAll(".btn-template").forEach((btn) => {
   btn.addEventListener("click", async (e) => {
     if (!currentImageBase64) {
